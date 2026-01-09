@@ -17,3 +17,5 @@ data/*.parquet
 # IDE
 .vscode/
 .idea/
+
+.env.example
