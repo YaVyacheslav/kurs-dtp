@@ -1,0 +1,23 @@
+body { background: #f7f7fb; }
+.navbar-brand { font-weight: 700; }
+
+#map { height: 560px; border-radius: 12px; }
+.card { border-radius: 12px; }
+
+.suggest-box {
+  position: absolute;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+.suggest-item { padding: 8px 10px; cursor: pointer; }
+.suggest-item:hover { background: #f1f3f5; }
+#map {
+  height: 600px !important;
+  width: 100%;
+  background: #eaeaea;
+}

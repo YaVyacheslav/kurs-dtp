@@ -1,0 +1,20 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      # Example (local backend run): mysql+pymysql://root:password@127.0.0.1:3306/kurs_bd?charset=utf8mb4
+      # If API is in Docker and MySQL is on host (Windows/Mac): use host.docker.internal instead of 127.0.0.1
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
