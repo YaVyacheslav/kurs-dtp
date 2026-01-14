@@ -2,14 +2,15 @@
 declare(strict_types=1);
 require_once __DIR__ . '/common.php';
 
-// Можно оставить открытым для демо,
-// но для “5” лучше требовать токен:
-$payload = require_auth(); // <- включено
+$payload = require_auth();
 
 $limit  = (int)($_GET['limit'] ?? 500);
 $offset = (int)($_GET['offset'] ?? 0);
 $region = trim((string)($_GET['region'] ?? ''));
 $category = trim((string)($_GET['category'] ?? ''));
+// Новые параметры
+$weather = trim((string)($_GET['weather'] ?? ''));
+$road = trim((string)($_GET['road'] ?? ''));
 
 if ($limit < 1) $limit = 1;
 if ($limit > 2000) $limit = 2000;
@@ -26,19 +27,29 @@ if ($category !== '') {
   $where[] = 'category = :category';
   $params[':category'] = $category;
 }
+// Фильтр по погоде (LIKE так как это JSON)
+if ($weather !== '') {
+  $where[] = 'weather LIKE :weather';
+  $params[':weather'] = '%' . $weather . '%';
+}
+// Фильтр по дороге
+if ($road !== '') {
+  $where[] = 'road_conditions LIKE :road';
+  $params[':road'] = '%' . $road . '%';
+}
 
 $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
 try {
   $db = pdo();
 
-  // total
+  // 1. Считаем общее кол-во
   $countSql = "SELECT COUNT(*) AS cnt FROM dtp_events $whereSql";
   $stmt = $db->prepare($countSql);
   $stmt->execute($params);
   $total = (int)($stmt->fetch()['cnt'] ?? 0);
 
-  // data
+  // 2. Выбираем данные
   $dataSql = "
     SELECT
       id, occurred_at, light, category, severity,
@@ -54,7 +65,6 @@ try {
   ";
 
   $stmt2 = $db->prepare($dataSql);
-
   foreach ($params as $k => $v) $stmt2->bindValue($k, $v);
   $stmt2->bindValue(':limit', $limit, PDO::PARAM_INT);
   $stmt2->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -62,7 +72,6 @@ try {
   $stmt2->execute();
   $rows = $stmt2->fetchAll();
 
-  // нормализуем JSON поля
   $items = [];
   foreach ($rows as $r) {
     $r['lat'] = (float)$r['lat'];

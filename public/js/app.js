@@ -1,11 +1,28 @@
-// ====== мини-обертка над fetch ======
+// =====================
+// CONFIG / GLOBALS
+// =====================
+const CLUSTER_COLORS = [
+  "#e6194B","#3cb44b","#ffe119","#4363d8","#f58231",
+  "#911eb4","#46f0f0","#f032e6","#bcf60c","#fabebe",
+  "#008080","#e6beff","#9A6324","#fffac8","#800000"
+];
+
+let map;
+let objectCollection = null;
+
+let lastPoints = [];
+let lastLabelsById = null;
+
+// =====================
+// AUTH + API
+// =====================
 function getToken() {
   return localStorage.getItem("access_token") || "";
 }
 
 async function apiGet(path) {
   const res = await fetch(path, {
-    headers: { "Authorization": "Bearer " + getToken() }
+    headers: { Authorization: "Bearer " + getToken() }
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -21,10 +38,8 @@ async function apiPost(path, body) {
   return res.json();
 }
 
-// ====== auth helpers ======
 async function requireAuthOrRedirect() {
-  const t = getToken();
-  if (!t) {
+  if (!getToken()) {
     window.location.href = "/login.html";
     return;
   }
@@ -36,184 +51,299 @@ async function requireAuthOrRedirect() {
   }
 }
 
-// ====== suggestions (живой поиск) ======
-async function loadSuggestions(type, q) {
-  const data = await apiGet(`/api/search.php?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}&limit=10`);
-  return data.items || [];
+// =====================
+// MAP
+// =====================
+function initMap() {
+  ymaps.ready(() => {
+    map = new ymaps.Map("map", {
+      center: [55.751244, 37.618423],
+      zoom: 10,
+      controls: ['zoomControl', 'fullscreenControl']
+    });
+
+    objectCollection = new ymaps.GeoObjectCollection({}, {
+      preset: 'islands#circleIcon'
+    });
+
+    map.geoObjects.add(objectCollection);
+
+    // Автозапуск
+    const btn = document.getElementById("applyFilters");
+    if (btn) btn.click();
+  });
 }
 
-function bindSuggest(inputEl, boxEl, type, onPick) {
-  let lastQ = "";
+function renderPoints(items) {
+  if (!map || !objectCollection) return;
 
-  inputEl.addEventListener("input", async () => {
-    const q = inputEl.value.trim();
-    lastQ = q;
-    boxEl.innerHTML = "";
-    boxEl.classList.add("d-none");
+  objectCollection.removeAll();
+
+  items.forEach(p => {
+    if (!p.lat || !p.lon) return;
+
+    let color = "#0d6efd";
+    let clusterHtml = "";
+
+    if (lastLabelsById && lastLabelsById[String(p.id)] !== undefined) {
+      const c = Number(lastLabelsById[String(p.id)]);
+      color = CLUSTER_COLORS[c % CLUSTER_COLORS.length];
+      clusterHtml = `<div class="mt-1"><b>Зона риска #${c}</b></div>`;
+    }
+
+    const placemark = new ymaps.Placemark([p.lat, p.lon], {
+      balloonContentHeader: p.category || "ДТП",
+      balloonContentBody: `
+        <div style="min-width:200px">
+          <div>${new Date(p.occurred_at).toLocaleString()}</div>
+          <div class="text-muted small">${p.region || ""}</div>
+          ${clusterHtml}
+          <div class="mt-2 border-top pt-1">
+            Пострадавшие: <b>${p.injured_count}</b><br>
+            Погибшие: <b>${p.dead_count}</b>
+          </div>
+        </div>
+      `,
+      hintContent: p.category
+    }, {
+      preset: 'islands#circleDotIcon',
+      iconColor: color
+    });
+
+    objectCollection.add(placemark);
+  });
+}
+
+// =====================
+// DATA
+// =====================
+async function loadEvents(filters) {
+  const usp = new URLSearchParams();
+  usp.set("limit", filters.limit || 800);
+  if (filters.region) usp.set("region", filters.region);
+  if (filters.category) usp.set("category", filters.category);
+  // Новые фильтры
+  if (filters.weather) usp.set("weather", filters.weather);
+  if (filters.road) usp.set("road", filters.road);
+
+  return apiGet(`/api/events.php?${usp.toString()}`);
+}
+
+async function loadSuggestions(type, q) {
+  const r = await apiGet(`/api/search.php?type=${type}&q=${encodeURIComponent(q)}`);
+  return r.items || [];
+}
+
+function bindSuggest(input, box, type, onPick) {
+  input.addEventListener("input", async () => {
+    const q = input.value.trim();
+    box.innerHTML = "";
+    box.classList.add("d-none");
 
     if (q.length < 2) return;
 
-    try {
-      const items = await loadSuggestions(type, q);
-      if (inputEl.value.trim() !== lastQ) return;
+    const items = await loadSuggestions(type, q);
+    if (!items.length) return;
 
-      if (!items.length) return;
-      boxEl.classList.remove("d-none");
-
-      items.forEach((s) => {
-        const div = document.createElement("div");
-        div.className = "suggest-item";
-        div.textContent = s;
-        div.onclick = () => {
-          inputEl.value = s;
-          boxEl.classList.add("d-none");
-          onPick(s);
-        };
-        boxEl.appendChild(div);
-      });
-    } catch {
-      // молча
-    }
+    box.classList.remove("d-none");
+    items.forEach(v => {
+      const d = document.createElement("div");
+      d.className = "suggest-item";
+      d.textContent = v;
+      d.onclick = () => {
+        input.value = v;
+        box.classList.add("d-none");
+        onPick(v);
+      };
+      box.appendChild(d);
+    });
   });
 
-  document.addEventListener("click", (e) => {
-    if (!boxEl.contains(e.target) && e.target !== inputEl) {
-      boxEl.classList.add("d-none");
+  document.addEventListener("click", e => {
+    if (!box.contains(e.target) && e.target !== input) {
+      box.classList.add("d-none");
     }
   });
 }
 
-// ====== map + data ======
-let map;
-let layerGroup;
-
-function initMap() {
-  console.log("initMap called");
-
-  if (typeof L === "undefined") {
-    alert("Leaflet НЕ загружен (L is undefined)");
-    return;
-  }
-
-  map = L.map("map").setView([55.751244, 37.618423], 10);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  layerGroup = L.layerGroup().addTo(map);
-}
-
-
-function renderPoints(items) {
-  layerGroup.clearLayers();
-
-  items.forEach((p) => {
-    if (!p.lat || !p.lon) return;
-    const m = L.circleMarker([p.lat, p.lon], { radius: 4 });
-    const html = `
-      <div style="min-width:240px">
-        <div><b>${p.category || "ДТП"}</b></div>
-        <div>${new Date(p.occurred_at).toLocaleString()}</div>
-        <div>${p.region || ""}</div>
-        <div>Постр.: ${p.injured_count} / Погиб.: ${p.dead_count}</div>
-      </div>
-    `;
-    m.bindPopup(html);
-    m.addTo(layerGroup);
-  });
-}
-
-async function loadEvents(filters) {
-  const usp = new URLSearchParams();
-  usp.set("limit", String(filters.limit || 800));
-  usp.set("offset", "0");
-  if (filters.region) usp.set("region", filters.region);
-  if (filters.category) usp.set("category", filters.category);
-
-  const data = await apiGet(`/api/events.php?${usp.toString()}`);
-  return data;
-}
-
-// ====== page bootstrap ======
+// =====================
+// PAGE BOOTSTRAP
+// =====================
 document.addEventListener("DOMContentLoaded", async () => {
-  // если это страница логина/регистрации — там своя логика
-  if (document.body.dataset.page === "login") {
-    const form = document.getElementById("loginForm");
-    const err = document.getElementById("err");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      err.textContent = "";
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+  const page = document.body.dataset.page;
 
-      try {
-        const out = await apiPost("/api/auth.php?action=login", { email, password });
-        localStorage.setItem("access_token", out.access_token);
-        window.location.href = "/index.html";
-      } catch (ex) {
-        err.textContent = "Ошибка входа";
-      }
-    });
+  if (page === "login") {
+    if (getToken()) { window.location.href = "/index.html"; return; }
+    initLoginForm();
     return;
   }
 
-  if (document.body.dataset.page === "register") {
-    const form = document.getElementById("registerForm");
-    const err = document.getElementById("err");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      err.textContent = "";
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-
-      try {
-        const out = await apiPost("/api/auth.php?action=register", { email, password });
-        localStorage.setItem("access_token", out.access_token);
-        window.location.href = "/index.html";
-      } catch (ex) {
-        err.textContent = "Ошибка регистрации (возможно, email уже занят)";
-      }
-    });
+  if (page === "register") {
+    if (getToken()) { window.location.href = "/index.html"; return; }
+    initRegisterForm();
     return;
   }
 
-  // dashboard
   await requireAuthOrRedirect();
-  initMap();
+  if (typeof ymaps === 'undefined') {
+      document.getElementById("map").innerHTML = "<div class='p-5 text-center text-danger'>Ошибка загрузки карт</div>";
+  } else {
+      initMap();
+  }
 
   const regionInput = document.getElementById("region");
   const categoryInput = document.getElementById("category");
+  const weatherInput = document.getElementById("weatherInput");
+  const roadInput = document.getElementById("roadInput");
+
   const regionBox = document.getElementById("regionSuggest");
   const categoryBox = document.getElementById("categorySuggest");
+
   const btnApply = document.getElementById("applyFilters");
+  const btnCluster = document.getElementById("runCluster");
   const btnLogout = document.getElementById("logout");
 
-  let filters = { region: "", category: "", limit: 800 };
+  const status = document.getElementById("status");
+  const mlStatus = document.getElementById("mlStatus");
+  const legend = document.getElementById("legend");
 
-  bindSuggest(regionInput, regionBox, "regions", (v) => { filters.region = v; });
-  bindSuggest(categoryInput, categoryBox, "categories", (v) => { filters.category = v; });
+  // Объект фильтров
+  let filters = { region: "", category: "", weather: "", road: "", limit: 1000 };
 
-  btnApply.addEventListener("click", async () => {
+  bindSuggest(regionInput, regionBox, "regions", v => filters.region = v);
+  bindSuggest(categoryInput, categoryBox, "categories", v => filters.category = v);
+
+  // Обработчик кнопки "Показать"
+  btnApply.onclick = async () => {
     filters.region = regionInput.value.trim();
     filters.category = categoryInput.value.trim();
+    filters.weather = weatherInput.value;
+    filters.road = roadInput.value;
 
-    const status = document.getElementById("status");
     status.textContent = "Загрузка...";
+    lastLabelsById = null;
+    legend.innerHTML = "";
+    mlStatus.textContent = "";
+
     try {
       const data = await loadEvents(filters);
-      renderPoints(data.items || []);
-      status.textContent = `Показано: ${(data.items || []).length} / Всего: ${data.total || 0}`;
+      lastPoints = data.items || [];
+      renderPoints(lastPoints);
+      status.textContent = `Найдено: ${data.total}`;
     } catch {
-      status.textContent = "Ошибка загрузки данных";
+      status.textContent = "Ошибка";
     }
-  });
+  };
 
-  btnLogout.addEventListener("click", () => {
+  // Обработчик ML (Кластеризация)
+  btnCluster.onclick = async () => {
+    // Обновляем фильтры перед запуском
+    filters.region = regionInput.value.trim();
+    filters.category = categoryInput.value.trim();
+    filters.weather = weatherInput.value;
+    filters.road = roadInput.value;
+
+    mlStatus.textContent = "Анализ рисков...";
+    legend.innerHTML = "";
+    btnCluster.disabled = true;
+
+    try {
+      const usp = new URLSearchParams({
+        action: "cluster",
+        limit: "2500"
+      });
+
+      if (filters.region) usp.set("region", filters.region);
+      if (filters.category) usp.set("category", filters.category);
+      if (filters.weather) usp.set("weather", filters.weather);
+      if (filters.road) usp.set("road", filters.road);
+
+      const out = await apiGet(`/api/clusters.php?${usp.toString()}`);
+
+      lastLabelsById = out.labels_by_id || {};
+      renderPoints(lastPoints);
+
+      mlStatus.innerHTML = `<span class="text-success">Готово!</span> Выделено <b>${out.k}</b> зон риска`;
+
+      legend.innerHTML = out.profiles.map(p => {
+        const col = CLUSTER_COLORS[p.cluster % CLUSTER_COLORS.length];
+        const centerBtn = (p.center && p.center[0])
+          ? `<button class="btn btn-link btn-sm p-0 text-decoration-none" onclick="map.setCenter([${p.center[0]}, ${p.center[1]}], 12)">📍</button>`
+          : '';
+
+        return `
+          <div class="border-start border-4 ps-2 py-2 bg-white shadow-sm rounded-end mb-2">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+               <span class="badge" style="background:${col}">Зона ${p.cluster}</span>
+               ${centerBtn}
+            </div>
+            <div class="fw-bold text-dark" style="font-size: 0.95rem; line-height: 1.2;">
+              ${p.title}
+            </div>
+            <div class="text-muted small mb-1">
+              ${p.subtitle || 'ДТП'}
+            </div>
+            <div class="d-flex justify-content-between text-muted" style="font-size:0.75rem">
+               <span>Всего: <b>${p.count}</b></span>
+               <span>Пострад.: <b>${p.injured_sum}</b></span>
+            </div>
+          </div>`;
+      }).join("");
+
+    } catch (e) {
+      console.error(e);
+      mlStatus.textContent = "Ошибка: " + e.message;
+    } finally {
+        btnCluster.disabled = false;
+    }
+  };
+
+  btnLogout.onclick = () => {
     localStorage.removeItem("access_token");
     window.location.href = "/login.html";
-  });
-
-  // автозагрузка
-  btnApply.click();
+  };
 });
+
+function initLoginForm() {
+  const form = document.getElementById("loginForm");
+  const errBox = document.getElementById("err");
+  if(!form) return;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    errBox.textContent = "";
+    try {
+      const res = await apiPost("/api/auth.php?action=login", {
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value
+      });
+      localStorage.setItem("access_token", res.access_token);
+      window.location.href = "/index.html";
+    } catch (err) {
+      let msg = err.message;
+      try { msg = JSON.parse(msg).error; } catch {}
+      errBox.textContent = msg || "Ошибка";
+    }
+  };
+}
+
+function initRegisterForm() {
+  const form = document.getElementById("registerForm");
+  const errBox = document.getElementById("err");
+  if(!form) return;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    errBox.textContent = "";
+    try {
+      const res = await apiPost("/api/auth.php?action=register", {
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value
+      });
+      localStorage.setItem("access_token", res.access_token);
+      window.location.href = "/index.html";
+    } catch (err) {
+      let msg = err.message;
+      try { msg = JSON.parse(msg).error; } catch {}
+      errBox.textContent = msg || "Ошибка";
+    }
+  };
+}

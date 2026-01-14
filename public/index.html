@@ -3,69 +3,122 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ДТП — сценарии и визуализация</title>
+  <title>ДТП Москвы — Аналитика</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
   <link href="/css/styles.css" rel="stylesheet">
 </head>
-<body>
-<nav class="navbar navbar-expand-lg bg-white border-bottom">
-  <div class="container">
-    <a class="navbar-brand" href="#">DTP Moscow — Каркас</a>
-    <div class="ms-auto d-flex gap-2">
-      <button id="logout" class="btn btn-outline-secondary btn-sm">Выйти</button>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top shadow-sm">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+      <span class="brand-icon">🚦</span>
+      <span class="fw-bold text-dark">DTP Analytics</span>
+    </a>
+    <div class="ms-auto">
+      <button id="logout" class="btn btn-sm btn-outline-danger">Выйти</button>
     </div>
   </div>
 </nav>
 
-<div class="container py-3">
-  <div class="row g-3">
-    <div class="col-lg-4">
-      <div class="card p-3">
-        <h5 class="mb-3">Фильтры</h5>
+<div class="container-fluid px-4 py-3 h-100">
+  <div class="row g-3 h-100">
 
-        <div class="mb-3 position-relative">
-          <label class="form-label">Район (живой поиск)</label>
-          <input id="region" class="form-control" placeholder="Напр.: Южное Тушино">
-          <div id="regionSuggest" class="suggest-box d-none"></div>
+    <div class="col-lg-3 col-xl-3 d-flex flex-column gap-3" style="max-height: calc(100vh - 80px); overflow-y: auto;">
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+          <h6 class="fw-bold mb-0 text-uppercase text-muted small spacing-1">Условия движения</h6>
         </div>
+        <div class="card-body">
 
-        <div class="mb-3 position-relative">
-          <label class="form-label">Категория (живой поиск)</label>
-          <input id="category" class="form-control" placeholder="Напр.: Столкновение">
-          <div id="categorySuggest" class="suggest-box d-none"></div>
+          <div class="mb-3 position-relative">
+            <label class="form-label fw-medium small text-muted">Район</label>
+            <input id="region" class="form-control bg-light border-0" placeholder="Вся Москва">
+            <div id="regionSuggest" class="suggest-box d-none shadow"></div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+               <label class="form-label fw-medium small text-muted">Погода</label>
+               <select id="weatherInput" class="form-select bg-light border-0 small">
+                 <option value="">Любая</option>
+                 <option value="Ясно">Ясно</option>
+                 <option value="Пасмурно">Пасмурно</option>
+                 <option value="Дождь">Дождь</option>
+                 <option value="Снегопад">Снегопад</option>
+                 <option value="Метель">Метель</option>
+                 <option value="Туман">Туман</option>
+               </select>
+            </div>
+            <div class="col-6">
+               <label class="form-label fw-medium small text-muted">Покрытие</label>
+               <select id="roadInput" class="form-select bg-light border-0 small">
+                 <option value="">Любое</option>
+                 <option value="Сухое">Сухое</option>
+                 <option value="Мокрое">Мокрое</option>
+                 <option value="Гололедица">Гололедица</option>
+                 <option value="Заснеженное">Заснеженное</option>
+               </select>
+            </div>
+          </div>
+
+          <div class="mb-3 position-relative">
+            <label class="form-label fw-medium small text-muted">Тип ДТП</label>
+            <input id="category" class="form-control bg-light border-0" placeholder="Все типы">
+            <div id="categorySuggest" class="suggest-box d-none shadow"></div>
+          </div>
+
+          <button id="applyFilters" class="btn btn-primary w-100 fw-medium">
+            Показать ДТП
+          </button>
+
+          <div class="mt-2 text-center">
+             <span class="badge bg-secondary-subtle text-secondary rounded-pill" id="status">Жду параметров</span>
+          </div>
         </div>
+      </div>
 
-        <button id="applyFilters" class="btn btn-primary w-100">Показать</button>
-
-        <div class="mt-3 small text-muted" id="status"></div>
-
-        <hr>
-        <div class="small">
-          <b>Открытые данные (ссылки вставь и в записку):</b>
-          <ul class="mb-0">
-            <li><a href="https://dtp-stat.ru/opendata" target="_blank">Карта ДТП — скачать данные</a></li>
-            <li><a href="https://tochno.st/datasets/traffic_accidents" target="_blank">Если быть точным — таблицы (CC BY)</a></li>
-          </ul>
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+          <h6 class="fw-bold mb-0 text-uppercase text-muted small spacing-1">Анализ рисков</h6>
         </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            Найти очаги аварийности для выбранных условий (где опаснее всего при текущей погоде).
+          </p>
 
-        <hr>
-        <div class="small text-muted">
-          TODO для следующего шага: добавить “сценарии” (K-means), гистограммы и раскраску точек по кластеру.
+          <button id="runCluster" class="btn btn-dark w-100 fw-medium position-relative">
+            <span>🔍 Анализ опасных зон</span>
+          </button>
+
+          <div class="small text-muted mt-2 text-center" id="mlStatus" style="min-height: 20px;"></div>
+
+          <div id="legend" class="d-flex flex-column gap-2 small mt-2"></div>
         </div>
+      </div>
+
+      <div class="small text-muted text-center py-2 opacity-75">
+        API: Yandex Maps &bull; Data: dtp-stat.ru
       </div>
     </div>
 
-    <div class="col-lg-8">
-      <div class="card p-2">
-        <div id="map"></div>
+    <div class="col-lg-9 col-xl-9">
+      <div class="card border-0 shadow-sm h-100 overflow-hidden">
+        <div id="map" class="h-100 w-100" style="min-height: 600px;"></div>
       </div>
     </div>
+
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://api-maps.yandex.ru/2.1/?apikey=9e226a60-c4ba-4fd7-a1ba-eb528cb89743&lang=ru_RU"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>

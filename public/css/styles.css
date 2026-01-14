@@ -1,23 +1,120 @@
-body { background: #f7f7fb; }
-.navbar-brand { font-weight: 700; }
+/* === ОБЩИЕ СТИЛИ === */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f3f4f6; /* Мягкий светло-серый фон (не чисто белый) */
+  color: #1f2937;
+  height: 100vh; /* Фиксируем высоту для Dashboard-стиля */
+  overflow: hidden; /* Убираем скролл у всего тела, скроллить будем блоки */
+}
 
-#map { height: 560px; border-radius: 12px; }
-.card { border-radius: 12px; }
+/* Если экран маленький (мобилка), возвращаем скролл */
+@media (max-width: 991px) {
+  body { height: auto; overflow: auto; }
+}
 
+/* === НАВИГАЦИЯ === */
+.navbar {
+  background: #ffffff !important;
+  height: 60px;
+}
+.brand-icon { font-size: 1.25rem; }
+
+/* === КАРТОЧКИ === */
+.card {
+  border-radius: 12px; /* Мягкое скругление */
+  transition: transform 0.2s ease;
+}
+/* Легкий эффект "приподнятия" карточки нет, чтобы не мельтешило, 
+   но оставим возможность для интерактивности */
+
+.shadow-sm {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* === ТИПОГРАФИКА === */
+.spacing-1 { letter-spacing: 0.05em; }
+.text-muted { color: #6b7280 !important; }
+
+/* === ПОЛЯ ВВОДА === */
+.form-control {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+.form-control:focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); /* Мягкое синее свечение */
+}
+
+/* === КНОПКИ === */
+.btn {
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 500;
+  border: none;
+}
+
+/* Основная кнопка - более строгий синий */
+.btn-primary {
+  background-color: #2563eb; 
+}
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
+
+/* Кнопка ML - темная */
+.btn-dark {
+  background-color: #1f2937;
+}
+.btn-dark:hover {
+  background-color: #111827;
+}
+
+/* === SUGGEST BOX (Выпадающий список) === */
 .suggest-box {
   position: absolute;
-  z-index: 9999;
+  z-index: 1000;
   background: #fff;
-  border: 1px solid #ddd;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   overflow: hidden;
   width: 100%;
-  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
 }
-.suggest-item { padding: 8px 10px; cursor: pointer; }
-.suggest-item:hover { background: #f1f3f5; }
+.suggest-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+.suggest-item:hover {
+  background-color: #f9fafb;
+  color: #2563eb;
+}
+
+/* === КАРТА === */
+/* Скругляем углы карты, чтобы она вписывалась в дизайн */
 #map {
-  height: 600px !important;
-  width: 100%;
-  background: #eaeaea;
+  border-radius: 0; /* Внутри карточки углы уже скруглены контейнером */
+}
+/* Хак для Яндекс.Карт, чтобы убрать лишние рамки если есть */
+[class*="ymaps-2"][class*="-map"] {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* === СКРОЛЛБАР (Chrome/Safari) === */
+/* Делаем скролл тонким и аккуратным */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 20px;
 }
