@@ -1,0 +1,39 @@
+<nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm px-4">
+  <a class="navbar-brand d-flex align-items-center gap-2" href="index.html">
+    <span class="brand-icon">🚦</span>
+    <span class="fw-bold text-dark">DTP - Analyze</span>
+  </a>
+
+  <div class="ms-auto d-flex gap-2 align-items-center">
+    <button
+      id="runAnalyzeBtn"
+      class="btn btn-sm btn-warning"
+      style="display:none"
+      data-only="map">
+      Запустить анализ
+    </button>
+
+    <button
+      id="toggleMarkers"
+      class="btn btn-sm btn-outline-secondary"
+      data-only="map">
+      Метки: вкл
+    </button>
+
+    <a href="index.html"
+       class="btn btn-sm btn-outline-primary"
+       data-nav="map">
+      Карта
+    </a>
+
+    <a href="stats.html"
+       class="btn btn-sm btn-outline-primary"
+       data-nav="stats">
+      Статистика
+    </a>
+
+    <button id="logout" class="btn btn-sm btn-outline-danger">
+      Выйти
+    </button>
+  </div>
+</nav>

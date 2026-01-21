@@ -13,23 +13,7 @@
 </head>
 
 <body>
-
-<nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm px-4">
-  <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-    <span class="brand-icon">🚦</span>
-    <span class="fw-bold text-dark">DTP Analytics</span>
-  </a>
-  <div class="ms-auto">
-    <!-- ✅ Кнопка только для админа (покажем через JS) -->
-    <button id="runAnalyzeBtn" class="btn btn-sm btn-warning me-2" style="display:none;">
-      Запустить анализ
-    </button>
-
-    <button id="toggleMarkers" class="btn btn-sm btn-outline-secondary me-2">Метки: вкл</button>
-    <button id="logout" class="btn btn-sm btn-outline-danger">Выйти</button>
-  </div>
-</nav>
-
+<div id="app-header"></div>
 <div class="main-container">
 
   <div class="sidebar">
@@ -70,7 +54,8 @@
           <div class="d-flex flex-column h-100">
 
             <div class="p-3 border-bottom bg-white flex-shrink-0">
-              <h6 class="fw-bold mb-0 text-uppercase text-muted small">Выявленные сценарии</h6>
+              <h6 class="fw-bold mb-2 text-uppercase text-muted small">Выявленные сценарии</h6>
+              <input id="scenarioSearch" type="text" class="form-control form-control-sm" placeholder="🔍 Поиск сценариев...">
             </div>
 
             <div id="legend-container" class="flex-grow-1 overflow-auto p-3" style="background: #f8f9fa;"></div>
@@ -132,12 +117,7 @@
 
 </div>
 
-<footer class="app-footer">
-  Источник открытых данных:
-  <a href="https://dtp-stat.ru/opendata" target="_blank" rel="noopener noreferrer">
-    https://dtp-stat.ru/opendata
-  </a>
-</footer>
+<div id="app-footer"></div>
 
 <div class="offcanvas offcanvas-end shadow" tabindex="-1" id="dtpDetails" style="width: 400px;">
   <div class="offcanvas-header border-bottom">
@@ -184,6 +164,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://api-maps.yandex.ru/2.1/?apikey=9e226a60-c4ba-4fd7-a1ba-eb528cb89743&suggest_apikey=3379a8e4-63cc-4dd9-9619-d21cf44c3c32&lang=ru_RU&load=package.full,SuggestView"></script>
-<script type="module" src="/js/main.js"></script>
+<script type="module">
+  import { loadLayout } from '/js/modules/layout.js';
+  loadLayout({ page: 'index' }).then(() => import('/js/main.js'));
+</script>
 </body>
 </html>

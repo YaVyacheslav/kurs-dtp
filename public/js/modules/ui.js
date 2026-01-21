@@ -116,7 +116,12 @@ export class UIManager {
     }
 
     scenarios.forEach((scen) => {
-      const clusterId = Number(scen.cluster);
+      const clusterId = toNum(scen.cluster ?? scen.id, null);
+
+      if (clusterId === null) {
+        console.warn('Scenario without numeric id:', scen);
+        return;
+      }
       const color = getScenarioColor(clusterId);
       const title = scen.title ?? scen.name ?? `Сценарий ${clusterId}`;
       const count = computeScenarioCount(scen);

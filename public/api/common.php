@@ -7,9 +7,9 @@ const DB_NAME = 'kurs_bd';
 const DB_USER = 'root';
 const DB_PASS = '';
 
-const JWT_SECRET = 'REPLACE_WITH_LONG_RANDOM_SECRET_32PLUS_CHARS';
+const JWT_SECRET = '7f8c9d0e1a2b3c4d5e6f7a8b9c0d1e2f';
 const JWT_ALG = 'HS256';
-const ACCESS_TOKEN_TTL_SECONDS = 30 * 60;
+const ACCESS_TOKEN_TTL_SECONDS = 1800;
 
 const ROLE_ORDER = [
   'user' => 1,
@@ -123,8 +123,7 @@ function safe_json_list(?string $raw): ?array {
 }
 
 function bearer_token(): ?string {
-  $hdr = $_SERVER['HTTP_AUTHORIZATION']
-      ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+  $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
 
   if (!$hdr && function_exists('apache_request_headers')) {
     $h = apache_request_headers();

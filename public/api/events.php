@@ -15,6 +15,9 @@ try {
   $weather  = trim((string)($_GET['weather'] ?? ''));
   $road     = trim((string)($_GET['road'] ?? ''));
 
+  $from = trim((string)($_GET['from'] ?? ''));
+  $to   = trim((string)($_GET['to'] ?? ''));
+
   $clusterId = (int)($_GET['cluster_id'] ?? 0);
 
   if ($limit < 1) $limit = 1;
@@ -29,6 +32,29 @@ try {
   if ($clusterId > 0) {
     $where[] = "e.cluster_id = :cluster_id";
     $params[':cluster_id'] = $clusterId;
+  }
+
+  if ($from !== '') {
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+      $where[] = "e.occurred_at >= :from";
+      $params[':from'] = $from . " 00:00:00";
+    } else {
+      $where[] = "e.occurred_at >= :from";
+      $params[':from'] = $from;
+    }
+  }
+
+  if ($to !== '') {
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+      $dt = new DateTimeImmutable($to . " 00:00:00");
+      $toExcl = $dt->modify('+1 day')->format('Y-m-d H:i:s');
+
+      $where[] = "e.occurred_at < :to_excl";
+      $params[':to_excl'] = $toExcl;
+    } else {
+      $where[] = "e.occurred_at <= :to";
+      $params[':to'] = $to;
+    }
   }
 
   if ($region) {
@@ -87,6 +113,7 @@ try {
       'category' => $r['category'],
       'severity' => $r['severity'],
       'region' => $r['region'],
+      'parent_region' => $r['parent_region'],
       'address' => $r['address'],
       'injured' => (int)$r['injured_count'],
       'dead' => (int)$r['dead_count'],

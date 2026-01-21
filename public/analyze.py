@@ -4,12 +4,11 @@ import json
 import numpy as np
 import math
 import argparse
-
+import sys
 from kmodes.kmodes import KModes
 from sklearn.cluster import DBSCAN
 from scipy.spatial import ConvexHull
 
-# === КОНФИГУРАЦИЯ БД ===
 DB_CONFIG = {
     'user': 'root',
     'password': '',
@@ -18,282 +17,258 @@ DB_CONFIG = {
     'port': 3306
 }
 
-# НАСТРОЙКИ
-YEARS_BACK_DEFAULT = 2
-DBSCAN_EPS_M_BASE_DEFAULT = 900
-DBSCAN_MIN_SAMPLES_BASE_DEFAULT = 3
-ADAPTIVE_DBSCAN_DEFAULT = True
-N_REF_DEFAULT = 700
-EPS_MIN_DEFAULT, EPS_MAX_DEFAULT = 100, 1600
-MIN_SAMPLES_MIN_DEFAULT, MIN_SAMPLES_MAX_DEFAULT = 3, 50
-ALPHA_EPS_DEFAULT = 0.4
-BETA_MIN_DEFAULT = 0.5
-CREATE_NOISE_CLUSTER_DEFAULT = True
-MAX_EVENTS_MAP_PER_CLUSTER = 500000
+DEFAULTS = {
+    'years': 2,
+    'eps': 900.0,
+    'min_samples': 3,
+    'adaptive': 1,
+    'n_ref': 700,
+    'eps_min': 100.0,
+    'eps_max': 1600.0,
+    'min_min': 3,
+    'min_max': 50,
+    'alpha_eps': 0.4,
+    'beta_min': 0.5,
+    'noise': 1,
+    'max_map_events': 500000
+}
 
 
-def get_db_connection():
+def get_connection():
     return mysql.connector.connect(**DB_CONFIG, use_pure=True)
 
 
-def clean_light(val):
-    if val is None: return "Не установлено"
-    val = str(val).lower().strip()
-    if 'светлое' in val: return 'День'
-    if 'включено' in val and 'не включено' not in val: return 'Ночь (свет)'
-    if 'отсутствует' in val or 'не включено' in val: return 'Ночь (темно)'
-    if 'сумерки' in val: return 'Сумерки'
+def normalize_light(val):
+    if val is None:
+        return "Не установлено"
+    v = str(val).lower().strip()
+    if 'светлое' in v: return 'День'
+    if 'включено' in v and 'не включено' not in v: return 'Ночь (свет)'
+    if 'отсутствует' in v or 'не включено' in v: return 'Ночь (темно)'
+    if 'сумерки' in v: return 'Сумерки'
     return 'Не установлено'
 
 
-def extract_primary_tag(json_str):
+def extract_tag(json_str):
     try:
-        tags = json.loads(json_str)
-        if isinstance(tags, list) and len(tags) > 0: return tags[0]
+        t = json.loads(json_str)
+        if isinstance(t, list) and t:
+            return t[0]
     except:
         pass
     return "Неизвестно"
 
 
-def latlon_to_local_meters(latlon: np.ndarray) -> np.ndarray:
+def get_scenario_title(weather, road, light):
+    w, r, l = str(weather).strip().lower(), str(road).strip().lower(), str(light).strip().lower()
+
+    time_str = str(light).strip()
+    if 'день' in l:
+        time_str = "Днём"
+    elif 'сумерки' in l:
+        time_str = "В сумерках"
+    elif 'ночь' in l:
+        time_str = "Ночью (светло)" if ('свет' in l or 'включено' in l) else "Ночью (темно)"
+
+    w_str = w
+    if 'ясно' in w:
+        w_str = "ясно"
+    elif 'пасмурно' in w:
+        w_str = "пасмурно"
+    elif 'дождь' in w:
+        w_str = "дождь"
+    elif 'снег' in w:
+        w_str = "снегопад"
+    elif 'туман' in w:
+        w_str = "туман"
+
+    r_str = r
+    if 'сухое' in r:
+        r_str = "сухой асфальт"
+    elif 'мокрое' in r:
+        r_str = "мокрая дорога"
+    elif 'гололед' in r:
+        r_str = "гололёд"
+    elif 'снежн' in r:
+        r_str = "снежный накат"
+    elif 'обработан' in r:
+        r_str = "дорога обработана"
+
+    return f"{time_str}, {w_str}. {r_str.capitalize()}"
+
+
+def project_coords(latlon):
     lat = latlon[:, 0].astype(float)
     lon = latlon[:, 1].astype(float)
-    lat0 = float(np.mean(lat))
-    lon0 = float(np.mean(lon))
-    lat0_rad = math.radians(lat0)
-    m_per_deg_lat = 110540.0
-    m_per_deg_lon = 111320.0 * math.cos(lat0_rad)
-    x = (lon - lon0) * m_per_deg_lon
-    y = (lat - lat0) * m_per_deg_lat
-    return np.column_stack([x, y])
+    lat0, lon0 = float(np.mean(lat)), float(np.mean(lon))
+    rad = math.radians(lat0)
+    mx = (lon - lon0) * 111320.0 * math.cos(rad)
+    my = (lat - lat0) * 110540.0
+    return np.column_stack([mx, my])
 
 
-def clamp(x, a, b):
-    return max(a, min(b, x))
+def get_adaptive_params(n, args):
+    n = max(1, int(n))
+    ref = max(1, int(args.n_ref))
+
+    f_eps = (ref / n) ** float(args.alpha_eps)
+    f_min = (n / ref) ** float(args.beta_min)
+
+    eps = float(args.eps) * f_eps
+    ms = int(round(float(args.min_samples) * f_min))
+
+    eps = max(float(args.eps_min), min(float(args.eps_max), eps))
+    ms = int(max(int(args.min_min), min(int(args.min_max), ms)))
+    ms = max(2, min(ms, n))
+
+    return eps, ms
 
 
-def adaptive_dbscan_params(n_points, eps_base, min_base, n_ref, eps_min, eps_max, min_min, min_max, alpha_eps,
-                           beta_min):
-    n = max(1, int(n_points))
-    n_ref = max(1, int(n_ref))
-    factor_eps = (n_ref / n) ** float(alpha_eps)
-    if n > n_ref:
-        factor_min = (n / n_ref) ** float(beta_min)
-    else:
-        factor_min = (n / n_ref) ** float(beta_min)
-    eps = float(eps_base) * factor_eps
-    min_samples = int(round(float(min_base) * factor_min))
-    eps = clamp(eps, float(eps_min), float(eps_max))
-    min_samples = int(clamp(min_samples, int(min_min), int(min_max)))
-    min_samples = min(min_samples, n)
-    min_samples = max(2, min_samples)
-    return eps, min_samples
-
-
-def parse_args():
+def parse_arguments():
     p = argparse.ArgumentParser()
-    p.add_argument("--years", type=int, default=YEARS_BACK_DEFAULT)
-    p.add_argument("--adaptive", type=int, default=1 if ADAPTIVE_DBSCAN_DEFAULT else 0)
-    p.add_argument("--eps", type=float, default=DBSCAN_EPS_M_BASE_DEFAULT)
-    p.add_argument("--min_samples", type=int, default=DBSCAN_MIN_SAMPLES_BASE_DEFAULT)
-    p.add_argument("--n_ref", type=int, default=N_REF_DEFAULT)
-    p.add_argument("--eps_min", type=float, default=EPS_MIN_DEFAULT)
-    p.add_argument("--eps_max", type=float, default=EPS_MAX_DEFAULT)
-    p.add_argument("--min_min", type=int, default=MIN_SAMPLES_MIN_DEFAULT)
-    p.add_argument("--min_max", type=int, default=MIN_SAMPLES_MAX_DEFAULT)
-    p.add_argument("--alpha_eps", type=float, default=ALPHA_EPS_DEFAULT)
-    p.add_argument("--beta_min", type=float, default=BETA_MIN_DEFAULT)
-    p.add_argument("--noise_cluster", type=int, default=1 if CREATE_NOISE_CLUSTER_DEFAULT else 0)
+    p.add_argument("--years", type=int, default=DEFAULTS['years'])
+    p.add_argument("--adaptive", type=int, default=DEFAULTS['adaptive'])
+    p.add_argument("--eps", type=float, default=DEFAULTS['eps'])
+    p.add_argument("--min_samples", type=int, default=DEFAULTS['min_samples'])
+    p.add_argument("--n_ref", type=int, default=DEFAULTS['n_ref'])
+    p.add_argument("--eps_min", type=float, default=DEFAULTS['eps_min'])
+    p.add_argument("--eps_max", type=float, default=DEFAULTS['eps_max'])
+    p.add_argument("--min_min", type=int, default=DEFAULTS['min_min'])
+    p.add_argument("--min_max", type=int, default=DEFAULTS['min_max'])
+    p.add_argument("--alpha_eps", type=float, default=DEFAULTS['alpha_eps'])
+    p.add_argument("--beta_min", type=float, default=DEFAULTS['beta_min'])
+    p.add_argument("--noise_cluster", type=int, default=DEFAULTS['noise'])
     return p.parse_args()
 
 
 def main():
-    args = parse_args()
-    years_back = max(1, int(args.years))
-    adaptive = bool(int(args.adaptive))
-    eps_base = float(args.eps)
-    min_base = max(2, int(args.min_samples))
-    n_ref = max(1, int(args.n_ref))
-    eps_min = float(args.eps_min)
-    eps_max = float(args.eps_max)
-    min_min = max(2, int(args.min_min))
-    min_max = max(min_min, int(args.min_max))
-    alpha_eps = float(args.alpha_eps)
-    beta_min = float(args.beta_min)
-    create_noise_cluster = bool(int(args.noise_cluster))
+    args = parse_arguments()
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        print("Подключение к БД успешно.")
+        conn = get_connection()
+        cur = conn.cursor()
     except Exception as e:
-        print(f"Ошибка подключения к БД: {e}")
-        return
+        print(f"DB Connection failed: {e}")
+        sys.exit(1)
 
-    print("1. Очистка старых результатов (сброс cluster_id)...")
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-
-    cursor.execute("UPDATE dtp_events SET cluster_id = NULL")
-
-    cursor.execute("TRUNCATE TABLE ml_clusters")
-    cursor.execute("TRUNCATE TABLE ml_scenarios")
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+    cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+    cur.execute("UPDATE dtp_events SET cluster_id = NULL")
+    cur.execute("TRUNCATE TABLE ml_clusters")
+    cur.execute("TRUNCATE TABLE ml_scenarios")
+    cur.execute("SET FOREIGN_KEY_CHECKS = 1")
     conn.commit()
 
-    print(f"2. Загрузка ДТП за последние {years_back} лет...")
     query = f"""
-        SELECT id,
-               weather,
-               road_conditions,
-               light,
-               ST_Y(location) as lat,
-               ST_X(location) as lon
+        SELECT id, weather, road_conditions, light, ST_Y(location) as lat, ST_X(location) as lon
         FROM dtp_events
-        WHERE weather IS NOT NULL
-          AND road_conditions IS NOT NULL
-          AND occurred_at >= DATE_SUB(CURDATE(), INTERVAL {years_back} YEAR)
+        WHERE weather IS NOT NULL AND road_conditions IS NOT NULL
+          AND occurred_at >= DATE_SUB(CURDATE(), INTERVAL {max(1, args.years)} YEAR)
           AND ST_X(location) BETWEEN 36 AND 39
           AND ST_Y(location) BETWEEN 54 AND 57
     """
     df = pd.read_sql(query, conn)
-    print(f"   Загружено {len(df)} корректных записей.")
 
     if len(df) < 50:
-        print("Мало данных.")
+        print("Insufficient data.")
         conn.close()
         return
 
-    df['w_clean'] = df['weather'].apply(extract_primary_tag)
-    df['r_clean'] = df['road_conditions'].apply(extract_primary_tag)
-    df['l_clean'] = df['light'].apply(clean_light)
-    cat_data = df[['w_clean', 'r_clean', 'l_clean']]
+    df['w'] = df['weather'].apply(extract_tag)
+    df['r'] = df['road_conditions'].apply(extract_tag)
+    df['l'] = df['light'].apply(normalize_light)
 
-    print("3. Подбор сценариев...")
+    X_cat = df[['w', 'r', 'l']]
     costs = []
-    K_RANGE = range(7, 30)
-    trained_models = {}
+    models = {}
+    K_vals = range(8, 30)
 
-    for k in K_RANGE:
-        print(f"   > k={k}...", end="\r")
+    for k in K_vals:
         km = KModes(n_clusters=k, init='Huang', n_init=3, verbose=0)
-        km.fit(cat_data)
+        km.fit(X_cat)
         costs.append(km.cost_)
-        trained_models[k] = km
+        models[k] = km
 
-    x = np.array(list(K_RANGE))
-    y = np.array(costs)
-    x_norm = (x - x.min()) / (x.max() - x.min())
-    y_norm = (y - y.min()) / (y.max() - y.min())
-    vec_line = np.array([1, y_norm[-1] - y_norm[0]])
-    vec_line = vec_line / np.linalg.norm(vec_line)
-    vec_points = np.stack((x_norm, y_norm - y_norm[0]), axis=1)
-    dists = np.linalg.norm(vec_points - vec_points @ vec_line[:, None] * vec_line, axis=1)
+    x_arr = np.array(list(K_vals))
+    y_arr = np.array(costs)
+    xn = (x_arr - x_arr.min()) / (x_arr.max() - x_arr.min())
+    yn = (y_arr - y_arr.min()) / (y_arr.max() - y_arr.min())
 
-    best_k = K_RANGE[np.argmax(dists)]
-    print(f"\n   >>> Оптимально: {best_k} сценариев")
+    vec = np.array([1, yn[-1] - yn[0]])
+    vec = vec / np.linalg.norm(vec)
+    vec_p = np.stack((xn, yn - yn[0]), axis=1)
+    dists = np.linalg.norm(vec_p - vec_p @ vec[:, None] * vec, axis=1)
 
-    km = trained_models[best_k]
-    df['scen_id'] = km.labels_
+    best_k = K_vals[np.argmax(dists)]
 
-    scen_map = {}
+    final_km = models[best_k]
+    df['scen'] = final_km.labels_
+
+    scen_ids = {}
     for i in range(best_k):
-        c = km.cluster_centroids_[i]
-        title = f"{c[0]} + {c[1]} + {c[2]}"
-        f_json = json.dumps({"weather": c[0], "road": c[1], "light": c[2]}, ensure_ascii=False)
-        cursor.execute("INSERT INTO ml_scenarios (title, factors_json) VALUES (%s, %s)", (title, f_json))
-        scen_map[i] = cursor.lastrowid
+        cnt = final_km.cluster_centroids_[i]
+        title = get_scenario_title(cnt[0], cnt[1], cnt[2])
+        js = json.dumps({"weather": cnt[0], "road": cnt[1], "light": cnt[2]}, ensure_ascii=False)
+        cur.execute("INSERT INTO ml_scenarios (title, factors_json) VALUES (%s, %s)", (title, js))
+        scen_ids[i] = cur.lastrowid
     conn.commit()
 
-    print("4. Гео-кластеризация DBSCAN...")
+    for tmp_id, db_id in scen_ids.items():
+        sub = df[df['scen'] == tmp_id].copy()
+        n = len(sub)
+        if n < 3: continue
 
-    for tmp_id, db_scenario_id in scen_map.items():
-        sub = df[df['scen_id'] == tmp_id].copy()
-        n_points = len(sub)
-        if n_points < 3: continue
+        eps, min_s = float(args.eps), max(2, min(n, int(args.min_samples)))
+        if args.adaptive:
+            eps, min_s = get_adaptive_params(n, args)
 
-        if adaptive:
-            eps_m, min_samples = adaptive_dbscan_params(n_points, eps_base, min_base, n_ref, eps_min, eps_max, min_min,
-                                                        min_max, alpha_eps, beta_min)
-        else:
-            eps_m = float(eps_base)
-            min_samples = max(2, int(min_base))
-            min_samples = min(min_samples, n_points)
+        if n < min_s: continue
 
-        if n_points < min_samples: continue
+        coords = sub[['lat', 'lon']].values.astype(float)
+        xy = project_coords(coords)
 
-        print(f"   scen_tmp={tmp_id} points={n_points} -> eps={eps_m:.1f}m, min_samples={min_samples}")
+        db = DBSCAN(eps=eps, min_samples=min_s)
+        labels = db.fit_predict(xy)
 
-        latlon = sub[['lat', 'lon']].values.astype(float)
-        xy = latlon_to_local_meters(latlon)
+        e_ids = sub['id'].to_numpy()
+        unique = sorted(set(labels))
 
-        dbscan = DBSCAN(eps=eps_m, min_samples=min_samples)
-        labels = dbscan.fit_predict(xy)
+        for lb in unique:
+            mask = (labels == lb)
+            pts = coords[mask]
+            batch_ids = e_ids[mask].tolist()
 
-        event_ids = sub['id'].to_numpy()
-        unique_labels = sorted(set(labels.tolist()))
-        unique_labels = [l for l in unique_labels if l >= 0] + ([-1] if (-1 in unique_labels) else [])
+            if not batch_ids: continue
 
-        for lab in unique_labels:
-            mask = (labels == lab)
-            pts = latlon[mask]
-            eids = event_ids[mask].tolist()
+            is_noise = (lb == -1)
+            if is_noise and not args.noise_cluster: continue
 
-            if len(eids) == 0: continue
+            poly_json = json.dumps(None)
+            center = np.mean(pts, axis=0)
 
-            is_noise = (lab == -1)
+            if not is_noise and len(pts) >= 3:
+                try:
+                    hull = ConvexHull(pts)
+                    h_pts = pts[hull.vertices]
+                    h_pts = np.vstack([h_pts, h_pts[0]])
+                    poly_json = json.dumps(h_pts.tolist())
+                except:
+                    pass
 
-            if is_noise:
-                if not create_noise_cluster: continue
-                center_mass = np.mean(pts, axis=0)
-                polygon_json = json.dumps(None)
-                cursor.execute("""
-                               INSERT INTO ml_clusters (scenario_id, center_lat, center_lon, points_count, polygon_json)
-                               VALUES (%s, %s, %s, %s, %s)
-                               """, (db_scenario_id, float(center_mass[0]), float(center_mass[1]), int(len(pts)),
-                                     polygon_json))
-                cid = cursor.lastrowid
+            cur.execute("""
+                        INSERT INTO ml_clusters (scenario_id, center_lat, center_lon, points_count, polygon_json)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """, (db_id, float(center[0]), float(center[1]), len(pts), poly_json))
 
-                if len(eids) > MAX_EVENTS_MAP_PER_CLUSTER:
-                    eids = eids[:MAX_EVENTS_MAP_PER_CLUSTER]
+            cid = cur.lastrowid
+            limit = DEFAULTS['max_map_events']
+            if len(batch_ids) > limit:
+                batch_ids = batch_ids[:limit]
 
-                update_data = [(int(cid), int(e)) for e in eids]
-
-                cursor.executemany(
-                    "UPDATE dtp_events SET cluster_id = %s WHERE id = %s",
-                    update_data
-                )
-                continue
-
-            if len(pts) < 3: continue
-
-            try:
-                hull = ConvexHull(pts)
-                h_pts = pts[hull.vertices]
-                h_pts = np.vstack([h_pts, h_pts[0]])
-                center_mass = np.mean(pts, axis=0)
-                cursor.execute("""
-                               INSERT INTO ml_clusters (scenario_id, center_lat, center_lon, points_count, polygon_json)
-                               VALUES (%s, %s, %s, %s, %s)
-                               """, (db_scenario_id, float(center_mass[0]), float(center_mass[1]), int(len(pts)),
-                                     json.dumps(h_pts.tolist())))
-                cid = cursor.lastrowid
-
-                if len(eids) > MAX_EVENTS_MAP_PER_CLUSTER:
-                    eids = eids[:MAX_EVENTS_MAP_PER_CLUSTER]
-
-                # --- ИЗМЕНЕНИЕ 2: UPDATE вместо INSERT ---
-                update_data = [(int(cid), int(e)) for e in eids]
-
-                cursor.executemany(
-                    "UPDATE dtp_events SET cluster_id = %s WHERE id = %s",
-                    update_data
-                )
-            except:
-                continue
+            data = [(cid, eid) for eid in batch_ids]
+            cur.executemany("UPDATE dtp_events SET cluster_id = %s WHERE id = %s", data)
 
     conn.commit()
     conn.close()
-    print("--- ГОТОВО ---")
 
 
 if __name__ == "__main__":

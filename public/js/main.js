@@ -12,14 +12,27 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const page = document.body?.dataset?.page || 'app';
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
+
+async function startApp() {
+  let page = document.body?.dataset?.page;
+
+  if (!page || page === 'app') {
+    const path = window.location.pathname;
+    if (path.includes('login')) page = 'login';
+    else if (path.includes('register')) page = 'register';
+    else page = 'app';
+  }
 
   if (page === 'login') return initLoginPage();
   if (page === 'register') return initRegisterPage();
 
   return initAppPage();
-});
+}
 
 async function initAppPage() {
   if (!api.getToken()) {
@@ -56,6 +69,20 @@ async function initAppPage() {
     });
   }
 
+  const searchInput = $('scenarioSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const val = e.target.value.toLowerCase().trim();
+      const container = $('legend-container');
+      if (!container) return;
+
+      Array.from(container.children).forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(val) ? '' : 'none';
+      });
+    });
+  }
+
   try {
     const r = await api.getMe();
     state.me = r?.user || null;
@@ -84,17 +111,17 @@ async function initAppPage() {
           Анализ...
         `;
 
-        ui.setLoading(true, '🚀 Выполняется ML-анализ данных...');
+        ui.setLoading(true, 'Выполняется ML-анализ данных...');
 
-        const res = await api.runAnalyze({ years: 2 }); //
+        const res = await api.runAnalyze({ years: 2 });
 
-        const out = String(res?.output || '');
-        const msg = (res?.ok ? '✅ Анализ успешно завершён!' : '⚠️ Анализ завершился с ошибкой'+
-                    `\n(exit_code=${res?.exit_code})`) ;
+        const msg = res?.ok
+          ? 'Анализ успешно завершён!'
+          : `Анализ завершился с ошибкой\n(exit_code=${res?.exit_code})`;
 
         alert(msg);
 
-        ui.setLoading(true, '🔄 Загрузка новых кластеров на карту...');
+        ui.setLoading(true, 'Загрузка новых кластеров на карту...');
 
         await loadScenarios();
 
@@ -109,6 +136,10 @@ async function initAppPage() {
   }
 
   await loadScenarios();
+
+  if (searchInput && searchInput.value) {
+    searchInput.dispatchEvent(new Event('input'));
+  }
 }
 
 function initRouteTab() {
@@ -130,7 +161,6 @@ function initRouteTab() {
       errEl.textContent = msg;
     }
   };
-
 
   if (typeof ymaps !== 'undefined') {
     ymaps.ready(() => {
@@ -290,7 +320,7 @@ async function loadScenarios() {
     ui.renderLegend(state.scenarios, onScenarioToggle);
     updateMap();
   } catch (e) {
-    console.error("Critical error in loadScenarios:", e);
+    console.error("Error loading scenarios:", e);
   } finally {
     ui.setLoading(false);
   }
