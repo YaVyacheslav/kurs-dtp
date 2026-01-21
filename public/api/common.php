@@ -1,30 +1,25 @@
 <?php
 declare(strict_types=1);
 
-// ====== НАСТРОЙКИ БД (ПОД ТВОЮ kurs_bd) ======
 const DB_HOST = '127.0.0.1';
 const DB_PORT = 3306;
 const DB_NAME = 'kurs_bd';
 const DB_USER = 'root';
-const DB_PASS = ''; // если есть пароль — впиши
+const DB_PASS = '';
 
-// JWT (простой HS256) — для авторизации токенами (одно из требований безопасности)
 const JWT_SECRET = 'REPLACE_WITH_LONG_RANDOM_SECRET_32PLUS_CHARS';
 const JWT_ALG = 'HS256';
-const ACCESS_TOKEN_TTL_SECONDS = 30 * 60; // 30 минут
+const ACCESS_TOKEN_TTL_SECONDS = 30 * 60;
 
-// RBAC (модель доступа)
 const ROLE_ORDER = [
   'user' => 1,
   'analyst' => 2,
   'admin' => 3
 ];
 
-// ====== ОБЩИЕ ХЕЛПЕРЫ ======
 function json_response($data, int $status = 200): void {
   http_response_code($status);
   header('Content-Type: application/json; charset=utf-8');
-  // same-origin: фронт и api на одном домене; CORS не нужен.
   echo json_encode($data, JSON_UNESCAPED_UNICODE);
   exit;
 }
@@ -104,12 +99,6 @@ function issue_access_token(int $userId, string $role): string {
   return jwt_sign($payload);
 }
 
-function bearer_token(): ?string {
-  $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-  if (preg_match('/Bearer\s+(.+)/i', $hdr, $m)) return trim($m[1]);
-  return null;
-}
-
 function require_auth(): array {
   $t = bearer_token();
   if (!$t) json_response(['error' => 'Missing Authorization Bearer token'], 401);
@@ -131,4 +120,17 @@ function safe_json_list(?string $raw): ?array {
   if (!$raw) return null;
   $v = json_decode($raw, true);
   return is_array($v) ? $v : null;
+}
+
+function bearer_token(): ?string {
+  $hdr = $_SERVER['HTTP_AUTHORIZATION']
+      ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+
+  if (!$hdr && function_exists('apache_request_headers')) {
+    $h = apache_request_headers();
+    $hdr = $h['Authorization'] ?? ($h['authorization'] ?? '');
+  }
+
+  if (preg_match('/Bearer\s+(.+)/i', $hdr, $m)) return trim($m[1]);
+  return null;
 }

@@ -8,117 +8,182 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="/css/styles.css" rel="stylesheet">
 </head>
 
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top shadow-sm">
-  <div class="container-fluid px-4">
-    <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-      <span class="brand-icon">🚦</span>
-      <span class="fw-bold text-dark">DTP Analytics</span>
-    </a>
-    <div class="ms-auto">
-      <button id="logout" class="btn btn-sm btn-outline-danger">Выйти</button>
-    </div>
+<nav class="navbar navbar-expand-lg bg-white border-bottom shadow-sm px-4">
+  <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+    <span class="brand-icon">🚦</span>
+    <span class="fw-bold text-dark">DTP Analytics</span>
+  </a>
+  <div class="ms-auto">
+    <!-- ✅ Кнопка только для админа (покажем через JS) -->
+    <button id="runAnalyzeBtn" class="btn btn-sm btn-warning me-2" style="display:none;">
+      Запустить анализ
+    </button>
+
+    <button id="toggleMarkers" class="btn btn-sm btn-outline-secondary me-2">Метки: вкл</button>
+    <button id="logout" class="btn btn-sm btn-outline-danger">Выйти</button>
   </div>
 </nav>
 
-<div class="container-fluid px-4 py-3 h-100">
-  <div class="row g-3 h-100">
+<div class="main-container">
 
-    <div class="col-lg-3 col-xl-3 d-flex flex-column gap-3" style="max-height: calc(100vh - 80px); overflow-y: auto;">
+  <div class="sidebar">
+    <div class="card border-0 shadow-sm d-flex flex-column h-100">
 
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-0 pt-3 pb-0">
-          <h6 class="fw-bold mb-0 text-uppercase text-muted small spacing-1">Условия движения</h6>
-        </div>
-        <div class="card-body">
-
-          <div class="mb-3 position-relative">
-            <label class="form-label fw-medium small text-muted">Район</label>
-            <input id="region" class="form-control bg-light border-0" placeholder="Вся Москва">
-            <div id="regionSuggest" class="suggest-box d-none shadow"></div>
-          </div>
-
-          <div class="row g-2 mb-3">
-            <div class="col-6">
-               <label class="form-label fw-medium small text-muted">Погода</label>
-               <select id="weatherInput" class="form-select bg-light border-0 small">
-                 <option value="">Любая</option>
-                 <option value="Ясно">Ясно</option>
-                 <option value="Пасмурно">Пасмурно</option>
-                 <option value="Дождь">Дождь</option>
-                 <option value="Снегопад">Снегопад</option>
-                 <option value="Метель">Метель</option>
-                 <option value="Туман">Туман</option>
-               </select>
-            </div>
-            <div class="col-6">
-               <label class="form-label fw-medium small text-muted">Покрытие</label>
-               <select id="roadInput" class="form-select bg-light border-0 small">
-                 <option value="">Любое</option>
-                 <option value="Сухое">Сухое</option>
-                 <option value="Мокрое">Мокрое</option>
-                 <option value="Гололедица">Гололедица</option>
-                 <option value="Заснеженное">Заснеженное</option>
-               </select>
-            </div>
-          </div>
-
-          <div class="mb-3 position-relative">
-            <label class="form-label fw-medium small text-muted">Тип ДТП</label>
-            <input id="category" class="form-control bg-light border-0" placeholder="Все типы">
-            <div id="categorySuggest" class="suggest-box d-none shadow"></div>
-          </div>
-
-          <button id="applyFilters" class="btn btn-primary w-100 fw-medium">
-            Показать ДТП
-          </button>
-
-          <div class="mt-2 text-center">
-             <span class="badge bg-secondary-subtle text-secondary rounded-pill" id="status">Жду параметров</span>
-          </div>
-        </div>
+      <div class="card-header bg-white border-0 pt-2 pb-0 flex-shrink-0 px-2">
+        <ul class="nav nav-tabs nav-fill card-header-tabs" id="sidebarTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active small fw-bold"
+                    id="analysis-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-analysis"
+                    type="button"
+                    role="tab"
+                    aria-controls="tab-analysis"
+                    aria-selected="true">
+              📊 Анализ
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link small fw-bold"
+                    id="route-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-route"
+                    type="button"
+                    role="tab"
+                    aria-controls="tab-route"
+                    aria-selected="false">
+              🚗 Маршрут
+            </button>
+          </li>
+        </ul>
       </div>
 
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-0 pt-3 pb-0">
-          <h6 class="fw-bold mb-0 text-uppercase text-muted small spacing-1">Анализ рисков</h6>
+      <div class="tab-content h-100 flex-grow-1">
+
+        <div class="tab-pane fade show active h-100 p-0" id="tab-analysis" role="tabpanel" aria-labelledby="analysis-tab">
+          <div class="d-flex flex-column h-100">
+
+            <div class="p-3 border-bottom bg-white flex-shrink-0">
+              <h6 class="fw-bold mb-0 text-uppercase text-muted small">Выявленные сценарии</h6>
+            </div>
+
+            <div id="legend-container" class="flex-grow-1 overflow-auto p-3" style="background: #f8f9fa;"></div>
+
+            <div id="cluster-info-panel" class="border-top p-3 bg-white flex-shrink-0" style="display: none;">
+              <h6 id="cluster-title" class="fw-bold mb-1">...</h6>
+              <div class="small text-muted mb-2" id="cluster-desc"></div>
+              <button class="btn btn-sm btn-outline-primary w-100" id="btn-details">
+                Подробнее о ДТП
+              </button>
+            </div>
+
+          </div>
         </div>
-        <div class="card-body">
-          <p class="small text-muted mb-3">
-            Найти очаги аварийности для выбранных условий (где опаснее всего при текущей погоде).
-          </p>
 
-          <button id="runCluster" class="btn btn-dark w-100 fw-medium position-relative">
-            <span>🔍 Анализ опасных зон</span>
-          </button>
+        <div class="tab-pane fade h-100 p-0" id="tab-route" role="tabpanel" aria-labelledby="route-tab">
+          <div class="d-flex flex-column h-100">
 
-          <div class="small text-muted mt-2 text-center" id="mlStatus" style="min-height: 20px;"></div>
+            <div class="p-3 border-bottom bg-white flex-shrink-0">
+              <h6 class="fw-bold mb-0 text-uppercase text-muted small">Построение маршрута</h6>
+            </div>
 
-          <div id="legend" class="d-flex flex-column gap-2 small mt-2"></div>
+            <div class="p-3 bg-white border-bottom flex-shrink-0">
+              <div class="mb-2">
+                <label class="form-label small text-muted mb-1" for="routeFrom">Откуда</label>
+                <input id="routeFrom"
+                       class="form-control"
+                       placeholder="Например: Тверская 1, Москва"
+                       autocomplete="off">
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small text-muted mb-1" for="routeTo">Куда</label>
+                <input id="routeTo"
+                       class="form-control"
+                       placeholder="Например: Красная площадь, Москва"
+                       autocomplete="off">
+              </div>
+
+              <div class="d-flex gap-2 mt-3">
+                <button id="buildRouteBtn" class="btn btn-primary flex-fill">Построить</button>
+                <button id="clearRouteBtn" class="btn btn-outline-secondary">Очистить</button>
+              </div>
+
+              <div id="routeError" class="text-danger small mt-2" style="display:none;"></div>
+            </div>
+            <div class="flex-grow-1 overflow-auto p-3" style="background:#f8f9fa;">
+            </div>
+
+          </div>
         </div>
-      </div>
-
-      <div class="small text-muted text-center py-2 opacity-75">
-        API: Yandex Maps &bull; Data: dtp-stat.ru
       </div>
     </div>
+  </div>
 
-    <div class="col-lg-9 col-xl-9">
-      <div class="card border-0 shadow-sm h-100 overflow-hidden">
-        <div id="map" class="h-100 w-100" style="min-height: 600px;"></div>
+  <div class="map-container">
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<footer class="app-footer">
+  Источник открытых данных:
+  <a href="https://dtp-stat.ru/opendata" target="_blank" rel="noopener noreferrer">
+    https://dtp-stat.ru/opendata
+  </a>
+</footer>
+
+<div class="offcanvas offcanvas-end shadow" tabindex="-1" id="dtpDetails" style="width: 400px;">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title fw-bold" id="detailId">ДТП</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-0">
+    <div class="p-4 border-bottom bg-light">
+      <div class="text-uppercase text-muted small fw-bold mb-1" id="detailCat">Тип</div>
+      <h4 class="mb-2 fw-bold" id="detailSeverity">Тяжесть</h4>
+      <div class="d-flex gap-2 mt-3">
+        <div class="bg-white px-3 py-2 rounded shadow-sm border text-center flex-fill">
+          <div class="h4 mb-0 text-danger fw-bold" id="detailInj">0</div><div class="small text-muted">Пострадало</div>
+        </div>
+        <div class="bg-white px-3 py-2 rounded shadow-sm border text-center flex-fill">
+          <div class="h4 mb-0 text-dark fw-bold" id="detailDead">0</div><div class="small text-muted">Погибло</div>
+        </div>
       </div>
     </div>
-
+    <div class="p-4">
+      <div class="mb-4">
+        <h6 class="fw-bold border-bottom pb-2 mb-3">📍 Данные</h6>
+        <div class="mb-2"><span class="text-muted small d-block">Адрес</span><span class="fw-medium" id="detailAddr">—</span></div>
+        <div class="mb-2"><span class="text-muted small d-block">Время</span><span class="fw-medium" id="detailTime">—</span></div>
+        <div class="mb-2"><span class="text-muted small d-block">Район</span><span class="fw-medium" id="detailRegion">—</span></div>
+      </div>
+      <div class="mb-4">
+        <h6 class="fw-bold border-bottom pb-2 mb-3">🌧 Условия</h6>
+        <div class="mb-2"><span class="text-muted small d-block">Погода</span><div id="detailWeather" class="d-flex flex-wrap gap-1 mt-1"></div></div>
+        <div class="mb-2"><span class="text-muted small d-block">Дорога</span><div id="detailRoad" class="d-flex flex-wrap gap-1 mt-1"></div></div>
+        <div class="mb-2"><span class="text-muted small d-block">Свет</span><span class="fw-medium" id="detailLight">—</span></div>
+      </div>
+      <div class="mb-4">
+        <h6 class="fw-bold border-bottom pb-2 mb-3">🏙 Окружение</h6>
+        <div id="detailNearby" class="d-flex flex-wrap gap-1"></div>
+      </div>
+      <div class="d-flex justify-content-between text-muted small border-top pt-3">
+        <div>Участников: <span class="fw-bold text-dark" id="detailPart">0</span></div>
+        <div>ID: <span class="font-monospace" id="detailSourceId">—</span></div>
+      </div>
+    </div>
   </div>
 </div>
 
-<script src="https://api-maps.yandex.ru/2.1/?apikey=9e226a60-c4ba-4fd7-a1ba-eb528cb89743&lang=ru_RU"></script>
-<script src="/js/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://api-maps.yandex.ru/2.1/?apikey=9e226a60-c4ba-4fd7-a1ba-eb528cb89743&suggest_apikey=3379a8e4-63cc-4dd9-9619-d21cf44c3c32&lang=ru_RU&load=package.full,SuggestView"></script>
+<script type="module" src="/js/main.js"></script>
 </body>
 </html>

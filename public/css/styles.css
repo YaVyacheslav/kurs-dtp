@@ -1,53 +1,104 @@
-/* === ОБЩИЕ СТИЛИ === */
-body {
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #f3f4f6; /* Мягкий светло-серый фон (не чисто белый) */
+  background-color: #f3f4f6;
   color: #1f2937;
-  height: 100vh; /* Фиксируем высоту для Dashboard-стиля */
-  overflow: hidden; /* Убираем скролл у всего тела, скроллить будем блоки */
+  overflow: hidden;
 }
 
-/* Если экран маленький (мобилка), возвращаем скролл */
 @media (max-width: 991px) {
   body { height: auto; overflow: auto; }
+  .main-container { flex-direction: column; overflow: visible !important; }
+  .sidebar { width: 100% !important; height: auto !important; }
+  .map-container { height: 400px !important; }
 }
 
-/* === НАВИГАЦИЯ === */
-.navbar {
-  background: #ffffff !important;
-  height: 60px;
+body {
+  display: flex;
+  flex-direction: column;
 }
+
+.navbar {
+  flex-shrink: 0;
+  z-index: 1000;
+  height: 60px;
+  background: #ffffff !important;
+}
+
 .brand-icon { font-size: 1.25rem; }
 
-/* === КАРТОЧКИ === */
+.main-container {
+  flex-grow: 1;
+  padding: 1rem;
+  overflow: hidden;
+  display: flex;
+  gap: 1rem;
+}
+
+.sidebar {
+  width: 350px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.map-container {
+  flex-grow: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
 .card {
-  border-radius: 12px; /* Мягкое скругление */
+  border-radius: 12px;
   transition: transform 0.2s ease;
 }
-/* Легкий эффект "приподнятия" карточки нет, чтобы не мельтешило, 
-   но оставим возможность для интерактивности */
 
 .shadow-sm {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
 }
 
-/* === ТИПОГРАФИКА === */
-.spacing-1 { letter-spacing: 0.05em; }
-.text-muted { color: #6b7280 !important; }
+.nav-tabs .nav-link {
+  border: none;
+  color: #6c757d;
+  border-bottom: 2px solid transparent;
+}
 
-/* === ПОЛЯ ВВОДА === */
+.nav-tabs .nav-link.active {
+  color: #2563eb;
+  border-bottom: 2px solid #2563eb;
+  background: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: transparent;
+  color: #2563eb;
+}
+
 .form-control {
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.9rem;
   transition: all 0.2s;
 }
+
 .form-control:focus {
   background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); /* Мягкое синее свечение */
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
 }
 
-/* === КНОПКИ === */
 .btn {
   border-radius: 8px;
   padding: 10px 16px;
@@ -55,66 +106,88 @@ body {
   border: none;
 }
 
-/* Основная кнопка - более строгий синий */
-.btn-primary {
-  background-color: #2563eb; 
-}
-.btn-primary:hover {
-  background-color: #1d4ed8;
-}
+.btn-primary { background-color: #2563eb; color: #fff; }
+.btn-primary:hover { background-color: #1d4ed8; color: #fff; }
 
-/* Кнопка ML - темная */
-.btn-dark {
-  background-color: #1f2937;
-}
-.btn-dark:hover {
-  background-color: #111827;
-}
+.btn-dark { background-color: #1f2937; color: #fff; }
+.btn-dark:hover { background-color: #111827; color: #fff; }
 
-/* === SUGGEST BOX (Выпадающий список) === */
-.suggest-box {
-  position: absolute;
-  z-index: 1000;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
+.search-wrapper {
+  position: relative;
   width: 100%;
-  max-height: 200px;
-  overflow-y: auto;
-  margin-top: 4px;
 }
+
+.custom-suggest-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  z-index: 10000;
+  max-height: 250px;
+  overflow-y: auto;
+  display: none;
+}
+
 .suggest-item {
   padding: 10px 12px;
   cursor: pointer;
-  font-size: 0.9rem;
-  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.1s;
 }
-.suggest-item:hover {
-  background-color: #f9fafb;
+
+.suggest-item:last-child { border-bottom: none; }
+.suggest-item:hover { background-color: #f3f4f6; color: #2563eb; }
+
+.suggest-title { font-weight: 500; color: #1f2937; }
+.suggest-subtitle { font-size: 12px; color: #6b7280; margin-top: 2px; }
+
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 20px; }
+
+[class*="ymaps-2"][class*="-map"] {
+  width: 100% !important;
+  height: 100% !important;
+}
+[class*="ymaps-2"][class*="-suggest-popup"] {
+  z-index: 99999 !important;
+}
+ymaps { overflow: visible !important; }
+.sidebar .tab-pane { overflow: visible !important; }
+
+/* === Источник данных (footer) === */
+.app-footer {
+  flex-shrink: 0;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.app-footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.app-footer a:hover {
   color: #2563eb;
 }
-
-/* === КАРТА === */
-/* Скругляем углы карты, чтобы она вписывалась в дизайн */
-#map {
-  border-radius: 0; /* Внутри карточки углы уже скруглены контейнером */
-}
-/* Хак для Яндекс.Карт, чтобы убрать лишние рамки если есть */
-[class*="ymaps-2"][class*="-map"] {
-    width: 100% !important;
-    height: 100% !important;
+body[data-page="login"],
+body[data-page="register"] {
+  height: auto;
+  overflow: auto;
 }
 
-/* === СКРОЛЛБАР (Chrome/Safari) === */
-/* Делаем скролл тонким и аккуратным */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
-  border-radius: 20px;
+#legend-container {
+  padding-bottom: 60px !important;
+
+  scroll-behavior: smooth;
 }
